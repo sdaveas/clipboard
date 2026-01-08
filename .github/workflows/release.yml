@@ -1,0 +1,69 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Build app
+        run: |
+          chmod +x build.sh
+          ./build.sh
+      
+      - name: Create ZIP archive
+        run: |
+          cd ClipboardManager.app/..
+          zip -r ClipboardManager.zip ClipboardManager.app
+          mv ClipboardManager.zip ..
+      
+      - name: Get version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "version=dev-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ClipboardManager.zip
+          body: |
+            ## Clipboard Manager ${{ steps.version.outputs.version }}
+            
+            A simple menu bar clipboard manager for macOS.
+            
+            ### Installation
+            1. Download `ClipboardManager.zip`
+            2. Unzip the file
+            3. Move `ClipboardManager.app` to your Applications folder
+            4. Right-click the app and select "Open" (first time only, to bypass Gatekeeper)
+            
+            ### Features
+            - Track up to 50 clipboard items
+            - Quick access with Ctrl+Shift+P
+            - Customizable keyboard shortcuts
+            - Right-click menu for clear history and restart
+            
+            ### Requirements
+            - macOS 13.0 or later
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload artifact
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClipboardManager-${{ steps.version.outputs.version }}
+          path: ClipboardManager.zip
