@@ -1,5 +1,7 @@
 # Clipboard Manager for macOS
 
+[![Download Latest Release](https://img.shields.io/github/v/release/sdaveas/clipboard?label=Download&style=for-the-badge)](https://github.com/sdaveas/clipboard/releases/latest/download/ClipboardManager.zip)
+
 A simple, fast menu bar clipboard manager for macOS. Track your clipboard history and quickly access previously copied items.
 
 ## Features
