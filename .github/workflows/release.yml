@@ -22,9 +22,18 @@ jobs:
           chmod +x build.sh
           ./build.sh
       
+      - name: Verify app was built
+        run: |
+          ls -la ClipboardManager.app
+          if [ ! -d "ClipboardManager.app" ]; then
+            echo "Error: ClipboardManager.app not found"
+            exit 1
+          fi
+      
       - name: Create ZIP archive
         run: |
-          zip -r ClipboardManager.zip ClipboardManager.app
+          zip -r -y ClipboardManager.zip ClipboardManager.app
+          ls -lh ClipboardManager.zip
       
       - name: Get version
         id: version
