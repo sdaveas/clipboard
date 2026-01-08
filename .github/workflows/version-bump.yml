@@ -11,6 +11,11 @@ on:
           - patch
           - minor
           - major
+      trigger_release:
+        description: 'Trigger release workflow after version bump'
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -83,6 +88,19 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
+      - name: Trigger release workflow
+        if: inputs.trigger_release
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'release.yml',
+              ref: 'v${{ steps.new_version.outputs.version }}'
+            });
+      
       - name: Summary
         run: |
           echo "## Version Bump Complete! 🚀" >> $GITHUB_STEP_SUMMARY
@@ -91,4 +109,8 @@ jobs:
           echo "- **New version:** ${{ steps.new_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Release type:** ${{ inputs.release_type }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The release workflow will now automatically build and publish the app." >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ inputs.trigger_release }}" == "true" ]]; then
+            echo "✅ Release workflow triggered automatically" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "The release workflow will automatically trigger when the tag is pushed." >> $GITHUB_STEP_SUMMARY
+          fi
