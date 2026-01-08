@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Carbon
 
 // MARK: - Clipboard Monitor
 class ClipboardMonitor: ObservableObject {
@@ -55,6 +56,132 @@ class ClipboardMonitor: ObservableObject {
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
         lastChangeCount = pasteboard.changeCount
+    }
+}
+
+// MARK: - Quick Panel View
+struct QuickPanelView: View {
+    @ObservedObject var clipboardMonitor: ClipboardMonitor
+    @Binding var selectedIndex: String
+    let onSelect: (Int) -> Void
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Clipboard History")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                Spacer()
+                Text("Ctrl+Shift+P")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            .padding()
+            
+            Divider()
+            
+            if clipboardMonitor.clipboardHistory.isEmpty {
+                VStack(spacing: 8) {
+                    Spacer()
+                    Text("No clipboard history")
+                        .font(.headline)
+                        .foregroundColor(.gray)
+                    Text("Copy some text to get started")
+                        .font(.subheadline)
+                        .foregroundColor(.gray.opacity(0.8))
+                    Spacer()
+                }
+                .frame(height: 200)
+            } else {
+                ScrollView {
+                    VStack(spacing: 4) {
+                        ForEach(Array(clipboardMonitor.clipboardHistory.enumerated()), id: \.element.id) { index, item in
+                            QuickPanelItemRow(
+                                number: index + 1,
+                                item: item,
+                                isSelected: selectedIndex == "\(index + 1)"
+                            )
+                        }
+                    }
+                    .padding(.vertical, 8)
+                }
+            }
+            
+            // Footer
+            if !clipboardMonitor.clipboardHistory.isEmpty {
+                Divider()
+                HStack {
+                    Text("Type a number (1-\(clipboardMonitor.clipboardHistory.count)) to paste")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    Spacer()
+                    if !selectedIndex.isEmpty {
+                        Text("Selected: \(selectedIndex)")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+            }
+        }
+        .frame(width: 600, height: 500)
+        .background(Color(NSColor.windowBackgroundColor))
+    }
+}
+
+struct QuickPanelItemRow: View {
+    let number: Int
+    let item: ClipboardMonitor.ClipboardItem
+    let isSelected: Bool
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Number badge
+            Text("\(number)")
+                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                .foregroundColor(.white)
+                .frame(width: 32, height: 32)
+                .background(isSelected ? Color.blue : Color.gray)
+                .cornerRadius(8)
+            
+            // Content
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.text)
+                    .font(.system(size: 13))
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                
+                Text(timeAgo(from: item.timestamp))
+                    .font(.system(size: 11))
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
+        .cornerRadius(8)
+        .padding(.horizontal, 8)
+    }
+    
+    private func timeAgo(from date: Date) -> String {
+        let seconds = Date().timeIntervalSince(date)
+        
+        if seconds < 60 {
+            return "Just now"
+        } else if seconds < 3600 {
+            let minutes = Int(seconds / 60)
+            return "\(minutes)m ago"
+        } else if seconds < 86400 {
+            let hours = Int(seconds / 3600)
+            return "\(hours)h ago"
+        } else {
+            let days = Int(seconds / 86400)
+            return "\(days)d ago"
+        }
     }
 }
 
@@ -162,11 +289,19 @@ struct ClipboardItemRow: View {
     }
 }
 
+// MARK: - Panel State
+class PanelState: ObservableObject {
+    @Published var selectedIndex = ""
+}
+
 // MARK: - App Delegate
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var popover: NSPopover?
     var clipboardMonitor: ClipboardMonitor?
+    var quickPanelWindow: NSWindow?
+    var hotKeyRef: EventHotKeyRef?
+    var panelState = PanelState()
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -188,6 +323,100 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         clipboardMonitor?.startMonitoring()
+        
+        // Register global hotkey (Ctrl+Shift+P)
+        registerGlobalHotkey()
+    }
+    
+    func registerGlobalHotkey() {
+        var eventHotKey: EventHotKeyRef?
+        let modifiers: UInt32 = UInt32(controlKey | shiftKey)
+        let keyCode: UInt32 = 35 // P key
+        
+        var eventType = EventTypeSpec()
+        eventType.eventClass = OSType(kEventClassKeyboard)
+        eventType.eventKind = OSType(kEventHotKeyPressed)
+        
+        let hotKeyID = EventHotKeyID(signature: OSType(0x48545259), id: 1)
+        
+        RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetEventDispatcherTarget(), 0, &eventHotKey)
+        hotKeyRef = eventHotKey
+        
+        // Install event handler
+        var eventHandler: EventHandlerRef?
+        var eventTypes = [eventType]
+        
+        InstallEventHandler(GetEventDispatcherTarget(), { _, event, userData in
+            let appDelegate = Unmanaged<AppDelegate>.fromOpaque(userData!).takeUnretainedValue()
+            appDelegate.showQuickPanel()
+            return noErr
+        }, 1, &eventTypes, Unmanaged.passUnretained(self).toOpaque(), &eventHandler)
+    }
+    
+    @objc func showQuickPanel() {
+        panelState.selectedIndex = ""
+        
+        if quickPanelWindow == nil {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 600, height: 500),
+                styleMask: [.titled, .closable, .fullSizeContentView],
+                backing: .buffered,
+                defer: false
+            )
+            
+            window.isReleasedWhenClosed = false
+            window.center()
+            window.level = .floating
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            window.isMovableByWindowBackground = true
+            
+            quickPanelWindow = window
+        }
+        
+        if let monitor = clipboardMonitor {
+            let contentView = QuickPanelWindowView(
+                clipboardMonitor: monitor,
+                panelState: panelState,
+                onSelect: { [weak self] index in
+                    self?.selectClipboardItem(at: index)
+                },
+                onClose: { [weak self] in
+                    self?.hideQuickPanel()
+                }
+            )
+            quickPanelWindow?.contentView = NSHostingView(rootView: contentView)
+        }
+        
+        quickPanelWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+    
+    func hideQuickPanel() {
+        quickPanelWindow?.orderOut(nil)
+        panelState.selectedIndex = ""
+    }
+    
+    func selectClipboardItem(at index: Int) {
+        guard let monitor = clipboardMonitor,
+              index >= 0 && index < monitor.clipboardHistory.count else {
+            return
+        }
+        
+        let item = monitor.clipboardHistory[index]
+        monitor.copyToClipboard(text: item.text)
+        hideQuickPanel()
+        
+        // Simulate paste (Cmd+V)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            let src = CGEventSource(stateID: .hidSystemState)
+            let cmdd = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true) // V key
+            let cmdu = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: false)
+            cmdd?.flags = .maskCommand
+            cmdu?.flags = .maskCommand
+            cmdd?.post(tap: .cghidEventTap)
+            cmdu?.post(tap: .cghidEventTap)
+        }
     }
     
     @objc func togglePopover() {
@@ -202,6 +431,46 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     func applicationWillTerminate(_ notification: Notification) {
         clipboardMonitor?.stopMonitoring()
+    }
+}
+
+// MARK: - Quick Panel Window View
+struct QuickPanelWindowView: View {
+    @ObservedObject var clipboardMonitor: ClipboardMonitor
+    @ObservedObject var panelState: PanelState
+    let onSelect: (Int) -> Void
+    let onClose: () -> Void
+    
+    var body: some View {
+        QuickPanelView(
+            clipboardMonitor: clipboardMonitor,
+            selectedIndex: $panelState.selectedIndex,
+            onSelect: onSelect
+        )
+        .onAppear {
+            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                handleKeyPress(event)
+                return nil
+            }
+        }
+    }
+    
+    func handleKeyPress(_ event: NSEvent) {
+        if event.keyCode == 53 { // Escape
+            onClose()
+        } else if event.keyCode == 36 { // Return
+            if let index = Int(panelState.selectedIndex), index > 0 && index <= clipboardMonitor.clipboardHistory.count {
+                onSelect(index - 1)
+            }
+        } else if let char = event.charactersIgnoringModifiers, char.count == 1 {
+            let character = char.first!
+            if character.isNumber {
+                panelState.selectedIndex += String(character)
+                if let index = Int(panelState.selectedIndex), index > 0 && index <= clipboardMonitor.clipboardHistory.count {
+                    onSelect(index - 1)
+                }
+            }
+        }
     }
 }
 
