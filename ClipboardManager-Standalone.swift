@@ -249,16 +249,22 @@ struct QuickPanelView: View {
                 Divider()
                 HStack {
                     if searchText.isEmpty {
-                        Text("Use arrows or type a number • Press Enter or Cmd+V to paste")
-                            .font(.caption)
-                            .foregroundColor(.gray)
+                        if isSearchVisible {
+                            Text("\(filteredHistory.count) of \(clipboardMonitor.clipboardHistory.count) items")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        } else {
+                            Text("Use arrows or type a number • Press Cmd+F to search")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
                     } else {
                         Text("\(filteredHistory.count) of \(clipboardMonitor.clipboardHistory.count) items")
                             .font(.caption)
                             .foregroundColor(.gray)
                     }
                     Spacer()
-                    if !selectedIndex.isEmpty {
+                    if !selectedIndex.isEmpty && !isSearchVisible {
                         Text("Selected: \(selectedIndex)")
                             .font(.caption)
                             .foregroundColor(.blue)
