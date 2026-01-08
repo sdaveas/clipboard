@@ -1,49 +1,68 @@
 # Clipboard Manager for macOS
 
-A simple menu bar clipboard manager that keeps track of your last 10 copied text items.
+A simple, fast menu bar clipboard manager for macOS. Track your clipboard history and quickly access previously copied items.
 
 ## Features
 
-- 📋 Lives in your menu bar with a clipboard icon
-- 📝 Automatically tracks your last 10 text clipboard items
-- ⏱️ Shows timestamps for each item
-- 🔄 Click any item to copy it back to your clipboard
-- ⌨️ **Quick Panel**: Press **Ctrl+Shift+P** to show a centered window with numbered items
-- 🔢 Type a number (1-10) to instantly paste that clipboard item
-- 🎨 Clean, native macOS interface using SwiftUI
+- 📋 **Menu Bar App**: Lives in your menu bar with a clipboard icon - no dock icon
+- 📝 **Clipboard History**: Automatically tracks text items (customizable: 5-50 items)
+- ⏱️ **Timestamps**: See when each item was copied ("Just now", "5m ago", etc.)
+- ⌨️ **Quick Access**: Global keyboard shortcut (default: Ctrl+Shift+P) to show numbered items
+- 🔢 **Fast Selection**: Type a number or click to copy any item
+- ⚙️ **Customizable**: Change history size and keyboard shortcuts
+- 🗑️ **Clear History**: Right-click menu to clear all items
+- 🔄 **Easy Restart**: Restart option in right-click menu
+- 🎨 **Native UI**: Clean macOS interface using SwiftUI
 
 ## Requirements
 
 - macOS 13.0 or later
-- Xcode 14.0 or later
+- Swift 5.0 or later (included with Xcode Command Line Tools)
 
 ## Building and Running
 
+### Command Line (No Xcode Required)
+
+```bash
+./build.sh
+open ClipboardManager.app
+```
+
+### With Xcode
+
 1. Open `ClipboardManager.xcodeproj` in Xcode
-2. Press Cmd+R to build and run the app
-3. The app will appear as a clipboard icon in your menu bar (no dock icon)
-4. Click the icon to see your clipboard history
+2. Press Cmd+R to build and run
+
+The app will appear as a clipboard icon in your menu bar (no dock icon).
 
 ## Usage
 
-### Menu Bar Access
-1. Copy text as you normally would (Cmd+C)
-2. The app automatically tracks each copy
-3. Click the menu bar icon to view your history
-4. Click any item in the list to copy it back to your clipboard
+### Menu Bar Icon
+- **Left-click**: Opens clipboard history popover with settings
+- **Right-click**: Shows menu with About, Clear History, Restart, and Quit
 
 ### Quick Panel (Keyboard Shortcut)
-1. Press **Ctrl+Shift+P** from anywhere to show the quick panel
-2. Each clipboard item is numbered 1-10
-3. Type the number to instantly paste that item
-4. Press **Esc** to close the panel
+1. Press your configured shortcut (default: **Ctrl+Shift+P**) from anywhere
+2. Each clipboard item is numbered (1-10 or more)
+3. **Type a number** or **click an item** to copy it to clipboard
+4. Press **Cmd+V** to paste in your target application
+5. Press **Esc** to close the panel
+
+### Settings
+1. Click the menu bar icon to open the popover
+2. Click the gear icon (⚙️) in the top-right corner
+3. Customize:
+   - **Maximum Clipboard Items**: 5-50 items (default: 10)
+   - **Keyboard Shortcut**: Choose modifier (Cmd+Shift, Ctrl+Shift, etc.) and key (P, C, V, H, K, L)
+4. Click "Apply Shortcut Change" to update the hotkey immediately
 
 ## How It Works
 
-- **ClipboardManagerApp.swift**: Main app entry point, sets up the menu bar icon
-- **ClipboardMonitor.swift**: Monitors the system clipboard for changes every 0.5 seconds
-- **ContentView.swift**: SwiftUI interface showing the clipboard history list
+- Monitors the system clipboard for changes every 0.5 seconds
+- Stores up to 50 text items (configurable)
+- Global keyboard shortcut for quick access
+- All settings persist via UserDefaults
 
-## Customization
+## License
 
-You can modify the maximum number of stored items by changing `maxHistoryCount` in `ClipboardMonitor.swift` (default is 10).
+MIT License - see [LICENSE](LICENSE) file for details

@@ -2,6 +2,57 @@ import AppKit
 import SwiftUI
 import Carbon
 
+// MARK: - Settings Manager
+class SettingsManager: ObservableObject {
+    static let shared = SettingsManager()
+    
+    @Published var maxHistoryCount: Int {
+        didSet {
+            UserDefaults.standard.set(maxHistoryCount, forKey: "maxHistoryCount")
+        }
+    }
+    
+    @Published var keyModifier: String {
+        didSet {
+            UserDefaults.standard.set(keyModifier, forKey: "keyModifier")
+        }
+    }
+    
+    @Published var keyCode: String {
+        didSet {
+            UserDefaults.standard.set(keyCode, forKey: "keyCode")
+        }
+    }
+    
+    private init() {
+        self.maxHistoryCount = UserDefaults.standard.object(forKey: "maxHistoryCount") as? Int ?? 10
+        self.keyModifier = UserDefaults.standard.string(forKey: "keyModifier") ?? "Ctrl+Shift"
+        self.keyCode = UserDefaults.standard.string(forKey: "keyCode") ?? "P"
+    }
+    
+    func getKeyCodeValue() -> UInt32 {
+        switch keyCode {
+        case "P": return 35
+        case "C": return 8
+        case "V": return 9
+        case "H": return 4
+        case "K": return 40
+        case "L": return 37
+        default: return 35
+        }
+    }
+    
+    func getModifierFlags() -> UInt32 {
+        switch keyModifier {
+        case "Cmd+Shift": return UInt32(cmdKey | shiftKey)
+        case "Ctrl+Shift": return UInt32(controlKey | shiftKey)
+        case "Option+Shift": return UInt32(optionKey | shiftKey)
+        case "Cmd+Ctrl": return UInt32(cmdKey | controlKey)
+        default: return UInt32(controlKey | shiftKey)
+        }
+    }
+}
+
 // MARK: - Clipboard Monitor
 class ClipboardMonitor: ObservableObject {
     @Published var clipboardHistory: [ClipboardItem] = []
@@ -9,7 +60,7 @@ class ClipboardMonitor: ObservableObject {
     private var timer: Timer?
     private var lastChangeCount: Int = 0
     private let pasteboard = NSPasteboard.general
-    private let maxHistoryCount = 10
+    private var settings = SettingsManager.shared
     
     struct ClipboardItem: Identifiable {
         let id = UUID()
@@ -47,8 +98,9 @@ class ClipboardMonitor: ObservableObject {
         let item = ClipboardItem(text: text, timestamp: Date())
         clipboardHistory.insert(item, at: 0)
         
-        if clipboardHistory.count > maxHistoryCount {
-            clipboardHistory = Array(clipboardHistory.prefix(maxHistoryCount))
+        let maxCount = settings.maxHistoryCount
+        if clipboardHistory.count > maxCount {
+            clipboardHistory = Array(clipboardHistory.prefix(maxCount))
         }
     }
     
@@ -73,7 +125,7 @@ struct QuickPanelView: View {
                     .font(.title2)
                     .fontWeight(.semibold)
                 Spacer()
-                Text("Ctrl+Shift+P")
+                Text("\(SettingsManager.shared.keyModifier)+\(SettingsManager.shared.keyCode)")
                     .font(.caption)
                     .foregroundColor(.gray)
             }
@@ -100,7 +152,10 @@ struct QuickPanelView: View {
                             QuickPanelItemRow(
                                 number: index + 1,
                                 item: item,
-                                isSelected: selectedIndex == "\(index + 1)"
+                                isSelected: selectedIndex == "\(index + 1)",
+                                onClick: {
+                                    onSelect(index)
+                                }
                             )
                         }
                     }
@@ -112,7 +167,7 @@ struct QuickPanelView: View {
             if !clipboardMonitor.clipboardHistory.isEmpty {
                 Divider()
                 HStack {
-                    Text("Type a number (1-\(clipboardMonitor.clipboardHistory.count)) to paste")
+                    Text("Click or type a number to copy - then press Cmd+V to paste")
                         .font(.caption)
                         .foregroundColor(.gray)
                     Spacer()
@@ -135,36 +190,51 @@ struct QuickPanelItemRow: View {
     let number: Int
     let item: ClipboardMonitor.ClipboardItem
     let isSelected: Bool
+    let onClick: () -> Void
+    @State private var isHovered = false
     
     var body: some View {
-        HStack(spacing: 12) {
-            // Number badge
-            Text("\(number)")
-                .font(.system(size: 16, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
-                .frame(width: 32, height: 32)
-                .background(isSelected ? Color.blue : Color.gray)
-                .cornerRadius(8)
-            
-            // Content
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.text)
-                    .font(.system(size: 13))
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        Button(action: onClick) {
+            HStack(spacing: 12) {
+                // Number badge
+                Text("\(number)")
+                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+                    .frame(width: 32, height: 32)
+                    .background(isSelected ? Color.blue : (isHovered ? Color.gray.opacity(0.8) : Color.gray))
+                    .cornerRadius(8)
                 
-                Text(timeAgo(from: item.timestamp))
-                    .font(.system(size: 11))
-                    .foregroundColor(.gray)
+                // Content
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.text)
+                        .font(.system(size: 13))
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    Text(timeAgo(from: item.timestamp))
+                        .font(.system(size: 11))
+                        .foregroundColor(.gray)
+                }
+                
+                Spacer()
+                
+                if isHovered {
+                    Image(systemName: "hand.tap.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.blue)
+                }
             }
-            
-            Spacer()
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
+        .buttonStyle(.plain)
+        .background(isSelected ? Color.blue.opacity(0.1) : (isHovered ? Color.gray.opacity(0.05) : Color.clear))
         .cornerRadius(8)
         .padding(.horizontal, 8)
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
     
     private func timeAgo(from date: Date) -> String {
@@ -185,9 +255,120 @@ struct QuickPanelItemRow: View {
     }
 }
 
+// MARK: - Settings View
+struct SettingsView: View {
+    @ObservedObject var settings = SettingsManager.shared
+    let onClose: () -> Void
+    let onHotkeyChange: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Settings")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.gray)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding()
+            
+            Divider()
+            
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Max History Count
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Maximum Clipboard Items")
+                            .font(.headline)
+                        HStack {
+                            Slider(value: Binding(
+                                get: { Double(settings.maxHistoryCount) },
+                                set: { settings.maxHistoryCount = Int($0) }
+                            ), in: 5...50, step: 1)
+                            Text("\(settings.maxHistoryCount)")
+                                .frame(width: 30)
+                                .font(.system(.body, design: .monospaced))
+                        }
+                        Text("Number of clipboard items to keep in history")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                    
+                    Divider()
+                    
+                    // Info about paste behavior
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("📋 Paste Behavior")
+                            .font(.headline)
+                        Text("Selected items are copied to clipboard. Press Cmd+V to paste them wherever you need.")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                    
+                    Divider()
+                    
+                    // Keyboard Shortcut
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Keyboard Shortcut")
+                            .font(.headline)
+                        
+                        HStack {
+                            Picker("Modifier", selection: $settings.keyModifier) {
+                                Text("Cmd+Shift").tag("Cmd+Shift")
+                                Text("Ctrl+Shift").tag("Ctrl+Shift")
+                                Text("Option+Shift").tag("Option+Shift")
+                                Text("Cmd+Ctrl").tag("Cmd+Ctrl")
+                            }
+                            .frame(width: 150)
+                            
+                            Text("+")
+                                .foregroundColor(.gray)
+                            
+                            Picker("Key", selection: $settings.keyCode) {
+                                Text("P").tag("P")
+                                Text("C").tag("C")
+                                Text("V").tag("V")
+                                Text("H").tag("H")
+                                Text("K").tag("K")
+                                Text("L").tag("L")
+                            }
+                            .frame(width: 80)
+                        }
+                        
+                        Text("Current: \(settings.keyModifier)+\(settings.keyCode)")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                        
+                        Text("⚠️ Restart required for shortcut changes to take effect")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                            .padding(.top, 4)
+                        
+                        Button("Apply Shortcut Change") {
+                            onHotkeyChange()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    
+                    Spacer()
+                }
+                .padding()
+            }
+        }
+        .frame(width: 400, height: 500)
+    }
+}
+
 // MARK: - Content View
 struct ContentView: View {
     @ObservedObject var clipboardMonitor: ClipboardMonitor
+    let onSettingsClick: () -> Void
     
     var body: some View {
         VStack(spacing: 0) {
@@ -196,6 +377,12 @@ struct ContentView: View {
                     .font(.headline)
                     .padding()
                 Spacer()
+                Button(action: onSettingsClick) {
+                    Image(systemName: "gearshape.fill")
+                        .foregroundColor(.gray)
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing)
             }
             .background(Color.gray.opacity(0.1))
             
@@ -300,8 +487,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var popover: NSPopover?
     var clipboardMonitor: ClipboardMonitor?
     var quickPanelWindow: NSWindow?
+    var settingsWindow: NSWindow?
     var hotKeyRef: EventHotKeyRef?
+    var eventHandlerRef: EventHandlerRef?
     var panelState = PanelState()
+    var previousApp: NSRunningApplication?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -310,7 +500,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             button.image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Clipboard Manager")
             button.action = #selector(togglePopover)
             button.target = self
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
+        
+        // Create context menu
+        setupContextMenu()
         
         popover = NSPopover()
         popover?.contentSize = NSSize(width: 300, height: 400)
@@ -319,7 +513,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         clipboardMonitor = ClipboardMonitor()
         
         if let monitor = clipboardMonitor {
-            popover?.contentViewController = NSHostingController(rootView: ContentView(clipboardMonitor: monitor))
+            popover?.contentViewController = NSHostingController(rootView: ContentView(
+                clipboardMonitor: monitor,
+                onSettingsClick: { [weak self] in
+                    self?.showSettings()
+                }
+            ))
         }
         
         clipboardMonitor?.startMonitoring()
@@ -328,10 +527,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         registerGlobalHotkey()
     }
     
+    
     func registerGlobalHotkey() {
+        // Unregister existing hotkey if any
+        if let hotKey = hotKeyRef {
+            UnregisterEventHotKey(hotKey)
+        }
+        if let handler = eventHandlerRef {
+            RemoveEventHandler(handler)
+        }
+        
+        let settings = SettingsManager.shared
         var eventHotKey: EventHotKeyRef?
-        let modifiers: UInt32 = UInt32(controlKey | shiftKey)
-        let keyCode: UInt32 = 35 // P key
+        let modifiers = settings.getModifierFlags()
+        let keyCode = settings.getKeyCodeValue()
         
         var eventType = EventTypeSpec()
         eventType.eventClass = OSType(kEventClassKeyboard)
@@ -351,9 +560,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             appDelegate.showQuickPanel()
             return noErr
         }, 1, &eventTypes, Unmanaged.passUnretained(self).toOpaque(), &eventHandler)
+        
+        eventHandlerRef = eventHandler
     }
     
     @objc func showQuickPanel() {
+        // Store the currently active app before showing panel
+        previousApp = NSWorkspace.shared.frontmostApplication
+        
         panelState.selectedIndex = ""
         
         if quickPanelWindow == nil {
@@ -405,28 +619,119 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         let item = monitor.clipboardHistory[index]
         monitor.copyToClipboard(text: item.text)
+        
+        print("📋 Selected item: \(item.text.prefix(50))...")
+        print("✅ Copied to clipboard - press Cmd+V to paste")
+        
         hideQuickPanel()
         
-        // Simulate paste (Cmd+V)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            let src = CGEventSource(stateID: .hidSystemState)
-            let cmdd = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true) // V key
-            let cmdu = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: false)
-            cmdd?.flags = .maskCommand
-            cmdu?.flags = .maskCommand
-            cmdd?.post(tap: .cghidEventTap)
-            cmdu?.post(tap: .cghidEventTap)
+        // Return focus to previous app
+        if let prevApp = previousApp, prevApp.bundleIdentifier != Bundle.main.bundleIdentifier {
+            print("🎯 Returning focus to: \(prevApp.localizedName ?? "Unknown")")
+            prevApp.activate(options: [])
         }
     }
     
-    @objc func togglePopover() {
-        if let button = statusItem?.button {
-            if popover?.isShown == true {
-                popover?.performClose(nil)
-            } else {
-                popover?.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+    
+    func showSettings() {
+        popover?.performClose(nil)
+        
+        if settingsWindow == nil {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 400, height: 500),
+                styleMask: [.titled, .closable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            
+            window.title = "Clipboard Manager Settings"
+            window.isReleasedWhenClosed = false
+            window.center()
+            
+            settingsWindow = window
+        }
+        
+        let settingsView = SettingsView(
+            onClose: { [weak self] in
+                self?.settingsWindow?.orderOut(nil)
+            },
+            onHotkeyChange: { [weak self] in
+                self?.registerGlobalHotkey()
+            }
+        )
+        
+        settingsWindow?.contentView = NSHostingView(rootView: settingsView)
+        settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+    
+    func setupContextMenu() {
+        // We'll handle the menu manually in togglePopover
+    }
+    
+    @objc func togglePopover(_ sender: Any?) {
+        guard let event = NSApp.currentEvent else { return }
+        
+        // Right-click shows menu, left-click shows popover
+        if event.type == .rightMouseUp {
+            let menu = NSMenu()
+            menu.addItem(NSMenuItem(title: "About Clipboard Manager", action: #selector(showAbout), keyEquivalent: ""))
+            menu.addItem(NSMenuItem.separator())
+            menu.addItem(NSMenuItem(title: "Clear History", action: #selector(clearHistory), keyEquivalent: ""))
+            menu.addItem(NSMenuItem(title: "Restart", action: #selector(restartApp), keyEquivalent: "r"))
+            menu.addItem(NSMenuItem.separator())
+            menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q"))
+            
+            if let button = statusItem?.button {
+                menu.popUp(positioning: nil, at: CGPoint(x: 0, y: button.bounds.height), in: button)
+            }
+        } else {
+            if let button = statusItem?.button {
+                if popover?.isShown == true {
+                    popover?.performClose(nil)
+                } else {
+                    popover?.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+                }
             }
         }
+    }
+    
+    @objc func showAbout() {
+        let alert = NSAlert()
+        alert.messageText = "Clipboard Manager"
+        alert.informativeText = "Version 1.0\n\nA simple menu bar clipboard manager for macOS.\n\nFeatures:\n• Track up to 50 clipboard items\n• Quick access with keyboard shortcuts\n• Customizable settings\n\nBuilt with Swift and SwiftUI"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+    
+    @objc func clearHistory() {
+        let alert = NSAlert()
+        alert.messageText = "Clear Clipboard History?"
+        alert.informativeText = "This will remove all saved clipboard items. This action cannot be undone."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Clear")
+        alert.addButton(withTitle: "Cancel")
+        
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            clipboardMonitor?.clipboardHistory.removeAll()
+            print("🗑️ Clipboard history cleared")
+        }
+    }
+    
+    @objc func restartApp() {
+        let url = URL(fileURLWithPath: Bundle.main.resourcePath!)
+        let path = url.deletingLastPathComponent().deletingLastPathComponent().absoluteString
+        let task = Process()
+        task.launchPath = "/usr/bin/open"
+        task.arguments = [path]
+        task.launch()
+        NSApplication.shared.terminate(nil)
+    }
+    
+    @objc func quitApp() {
+        NSApplication.shared.terminate(nil)
     }
     
     func applicationWillTerminate(_ notification: Notification) {
