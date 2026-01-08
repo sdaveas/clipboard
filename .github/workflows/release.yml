@@ -30,6 +30,11 @@ jobs:
             exit 1
           fi
       
+      - name: Sign app (ad-hoc)
+        run: |
+          codesign --force --deep --sign - ClipboardManager.app
+          codesign --verify --verbose ClipboardManager.app
+      
       - name: Create ZIP archive
         run: |
           zip -r -y ClipboardManager.zip ClipboardManager.app
@@ -55,10 +60,14 @@ jobs:
             A simple menu bar clipboard manager for macOS.
             
             ### Installation
-            1. Download `ClipboardManager.zip`
+            1. Download `ClipboardManager.zip` below
             2. Unzip the file
             3. Move `ClipboardManager.app` to your Applications folder
-            4. Right-click the app and select "Open" (first time only, to bypass Gatekeeper)
+            4. **Remove quarantine flag** (required for unsigned apps):
+               ```bash
+               xattr -cr /Applications/ClipboardManager.app
+               ```
+            5. Launch the app - it will appear in your menu bar
             
             ### Features
             - Track up to 50 clipboard items

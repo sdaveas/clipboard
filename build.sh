@@ -40,6 +40,10 @@ cat > ClipboardManager.app/Contents/Info.plist << 'EOF'
 </plist>
 EOF
 
+# Ad-hoc code sign the app (avoids quarantine issues)
+echo "Signing app..."
+codesign --force --deep --sign - ClipboardManager.app
+
 echo "✅ Build complete! App created at: ClipboardManager.app"
 echo ""
 echo "To run: open ClipboardManager.app"

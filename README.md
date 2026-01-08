@@ -1,70 +1,160 @@
 # Clipboard Manager for macOS
 
+<div align="center">
+
 [![Download Latest Release](https://img.shields.io/github/v/release/sdaveas/clipboard?label=Download&style=for-the-badge)](https://github.com/sdaveas/clipboard/releases/latest/download/ClipboardManager.zip)
 
-A simple, fast menu bar clipboard manager for macOS. Track your clipboard history and quickly access previously copied items.
+**Never lose what you copied again.**
 
-## Features
+A lightweight, native macOS menu bar app that remembers your clipboard history.
 
-- 📋 **Menu Bar App**: Lives in your menu bar with a clipboard icon - no dock icon
-- 📝 **Clipboard History**: Automatically tracks text items (customizable: 5-50 items)
-- ⏱️ **Timestamps**: See when each item was copied ("Just now", "5m ago", etc.)
-- ⌨️ **Quick Access**: Global keyboard shortcut (default: Ctrl+Shift+P) to show numbered items
-- 🔢 **Fast Selection**: Type a number or click to copy any item
-- ⚙️ **Customizable**: Change history size and keyboard shortcuts
-- 🗑️ **Clear History**: Right-click menu to clear all items
-- 🔄 **Easy Restart**: Restart option in right-click menu
-- 🎨 **Native UI**: Clean macOS interface using SwiftUI
+</div>
 
-## Requirements
+---
 
-- macOS 13.0 or later
-- Swift 5.0 or later (included with Xcode Command Line Tools)
+## ✨ What is this?
 
-## Building and Running
+Clipboard Manager is a simple tool that sits quietly in your macOS menu bar and keeps track of everything you copy. Need to paste something you copied 5 minutes ago? No problem. It's all there, ready to use.
 
-### Command Line (No Xcode Required)
+<div align="center">
+
+<table>
+<tr>
+<td width="50%" align="center">
+<h3>Menu Bar Interface</h3>
+</td>
+<td width="50%" align="center">
+<h3>Quick Access Panel (Ctrl+Shift+P)</h3>
+</td>
+</tr>
+<tr>
+<td align="center">
+<img src="menu_bar.png" width="400" alt="Menu Bar Screenshot">
+</td>
+<td align="center">
+<img src="shortcut.png" width="400" alt="Keyboard Shortcut Screenshot">
+</td>
+</tr>
+</table>
+
+</div>
+
+## 🚀 Getting Started
+
+### Installation
+
+1. **Download** the latest release:
+   - Click the blue "Download" badge above, or
+   - Go to [Releases](https://github.com/sdaveas/clipboard/releases/latest) and download `ClipboardManager.zip`
+
+2. **Install** the app:
+   - Unzip the downloaded file
+   - Drag `ClipboardManager.app` to your Applications folder
+
+3. **Remove quarantine** (required for unsigned apps):
+   - Open **Terminal** (press **Cmd+Space**, type "Terminal", and press Enter)
+   - Copy and paste this command:
+     ```bash
+     xattr -cr /Applications/ClipboardManager.app
+     ```
+   - Press **Enter**
+   
+   > **Note**: This is a **one-time step** needed only for the first installation. It tells macOS to trust the app.
+
+4. **Launch** the app:
+   - Open it from your Applications folder
+   - You'll see a clipboard icon appear in your menu bar 📋
+
+That's it! The app is now running and tracking your clipboard.
+
+### Make it Start Automatically on Login (Optional)
+
+To have ClipboardManager launch automatically when you start your Mac:
+
+1. Look for **Login Items** in Spotlight
+2. Click the **"+"** button
+3. Navigate to your **Applications** folder
+4. Select **ClipboardManager.app** and click **Add**
+
+Now the app will automatically start every time you log in!
+
+## 💡 How to Use
+
+### Two Ways to Access Your History
+
+**1. Click the menu bar icon** 🖱️
+- See all your recent clipboard items with timestamps
+- Click any item to copy it again
+- Access settings via the gear icon ⚙️
+
+**2. Use the keyboard shortcut** ⌨️
+- Press **Ctrl+Shift+P** from anywhere (customizable)
+- Type a number or click to select an item
+- The item is automatically copied—just press **Cmd+V** to paste
+- Press **Esc** to close
+
+### Customize Your Settings
+
+1. Click the menu bar icon
+2. Click the **gear icon (⚙️)** in the top-right
+3. Adjust:
+   - **History Size**: Keep 5-50 items (default: 10)
+   - **Keyboard Shortcut**: Change the hotkey to your preference
+4. Click **"Apply Shortcut Change"** to save
+
+### Other Options (Right-Click Menu)
+
+- **Clear History**: Wipe all stored clipboard items
+- **Restart**: Restart the app
+- **Quit**: Close the app completely
+
+## ✅ What You Get
+
+- ✨ **Lightweight & Native**: Built with SwiftUI, feels like part of macOS
+- 📝 **Automatic Tracking**: Captures everything you copy, no effort required
+- ⏱️ **Smart Timestamps**: "Just now", "5m ago", "1h ago"—know when you copied something
+- ⚡ **Lightning Fast**: Quick access via keyboard shortcut or menu bar
+- 🎛️ **Fully Customizable**: Adjust history size and keyboard shortcuts to your liking
+- 🔒 **Privacy First**: Everything stays on your Mac, no cloud sync
+- 🧹 **Clean Interface**: Simple, uncluttered design that stays out of your way
+
+## 🛠️ Building from Source
+
+Want to build it yourself? Easy.
+
+### Quick Build (No Xcode Required)
 
 ```bash
 ./build.sh
 open ClipboardManager.app
 ```
 
-### With Xcode
+### Using Xcode
 
-1. Open `ClipboardManager.xcodeproj` in Xcode
-2. Press Cmd+R to build and run
+1. Open `ClipboardManager.xcodeproj`
+2. Press **Cmd+R** to build and run
 
-The app will appear as a clipboard icon in your menu bar (no dock icon).
+**Requirements**: macOS 13.0+, Swift 5.0+ (included with Xcode Command Line Tools)
 
-## Usage
+## ❓ FAQ
 
-### Menu Bar Icon
-- **Left-click**: Opens clipboard history popover with settings
-- **Right-click**: Shows menu with About, Clear History, Restart, and Quit
+**Q: Does this work with images or files?**  
+A: Currently, only text is supported.
 
-### Quick Panel (Keyboard Shortcut)
-1. Press your configured shortcut (default: **Ctrl+Shift+P**) from anywhere
-2. Each clipboard item is numbered (1-10 or more)
-3. **Type a number** or **click an item** to copy it to clipboard
-4. Press **Cmd+V** to paste in your target application
-5. Press **Esc** to close the panel
+**Q: Where is my clipboard data stored?**  
+A: Everything is stored locally on your Mac using UserDefaults. Nothing is sent to the cloud.
 
-### Settings
-1. Click the menu bar icon to open the popover
-2. Click the gear icon (⚙️) in the top-right corner
-3. Customize:
-   - **Maximum Clipboard Items**: 5-50 items (default: 10)
-   - **Keyboard Shortcut**: Choose modifier (Cmd+Shift, Ctrl+Shift, etc.) and key (P, C, V, H, K, L)
-4. Click "Apply Shortcut Change" to update the hotkey immediately
+**Q: How often does it check for clipboard changes?**  
+A: Every 0.5 seconds—fast enough to catch everything, efficient enough not to drain resources.
 
-## How It Works
+## 📜 License
 
-- Monitors the system clipboard for changes every 0.5 seconds
-- Stores up to 50 text items (configurable)
-- Global keyboard shortcut for quick access
-- All settings persist via UserDefaults
+MIT License - see [LICENSE](LICENSE) for details.
 
-## License
+---
 
-MIT License - see [LICENSE](LICENSE) file for details
+<div align="center">
+
+**Made with ❤️ for macOS users who copy a lot**
+
+</div>
