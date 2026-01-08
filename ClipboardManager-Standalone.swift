@@ -115,7 +115,41 @@ class ClipboardMonitor: ObservableObject {
 struct QuickPanelView: View {
     @ObservedObject var clipboardMonitor: ClipboardMonitor
     @Binding var selectedIndex: String
+    @Binding var isSearchVisible: Bool
+    @Binding var selectedItemIndex: Int
     let onSelect: (Int) -> Void
+    let onFilteredIndicesChange: ([Int]) -> Void
+    @State private var searchText: String = ""
+    @FocusState private var isSearchFocused: Bool
+    
+    // Fuzzy search filtering
+    private var filteredHistory: [(index: Int, item: ClipboardMonitor.ClipboardItem)] {
+        let history = clipboardMonitor.clipboardHistory.enumerated().map { ($0, $1) }
+        
+        if searchText.isEmpty {
+            return Array(history)
+        }
+        
+        let query = searchText.lowercased()
+        return history.filter { _, item in
+            fuzzyMatch(query: query, text: item.text.lowercased())
+        }
+    }
+    
+    // Simple fuzzy matching algorithm
+    private func fuzzyMatch(query: String, text: String) -> Bool {
+        var queryIndex = query.startIndex
+        var textIndex = text.startIndex
+        
+        while queryIndex < query.endIndex && textIndex < text.endIndex {
+            if query[queryIndex] == text[textIndex] {
+                queryIndex = query.index(after: queryIndex)
+            }
+            textIndex = text.index(after: textIndex)
+        }
+        
+        return queryIndex == query.endIndex
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -131,6 +165,36 @@ struct QuickPanelView: View {
             }
             .padding()
             
+            // Search field (toggleable with Cmd+F)
+            if isSearchVisible {
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    TextField("Search clipboard...", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .focused($isSearchFocused)
+                    if !searchText.isEmpty {
+                        Button(action: { searchText = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.gray)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Button(action: { isSearchVisible = false }) {
+                        Image(systemName: "xmark")
+                            .foregroundColor(.gray)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Close search (Cmd+F)")
+                }
+                .padding(8)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(8)
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            
             Divider()
             
             if clipboardMonitor.clipboardHistory.isEmpty {
@@ -145,17 +209,34 @@ struct QuickPanelView: View {
                     Spacer()
                 }
                 .frame(height: 200)
+            } else if filteredHistory.isEmpty {
+                VStack(spacing: 8) {
+                    Spacer()
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 48))
+                        .foregroundColor(.gray.opacity(0.5))
+                    Text("No matches found")
+                        .font(.headline)
+                        .foregroundColor(.gray)
+                    Text("Try a different search")
+                        .font(.subheadline)
+                        .foregroundColor(.gray.opacity(0.8))
+                    Spacer()
+                }
+                .frame(height: 200)
             } else {
                 ScrollView {
                     VStack(spacing: 4) {
-                        ForEach(Array(clipboardMonitor.clipboardHistory.enumerated()), id: \.element.id) { index, item in
+                        ForEach(Array(filteredHistory.enumerated()), id: \.element.item.id) { displayIndex, historyItem in
                             QuickPanelItemRow(
-                                number: index + 1,
-                                item: item,
-                                isSelected: selectedIndex == "\(index + 1)",
+                                number: historyItem.index + 1,
+                                item: historyItem.item,
+                                isSelected: isSearchVisible ? (displayIndex == selectedItemIndex) : (historyItem.index == selectedItemIndex || selectedIndex == "\(historyItem.index + 1)"),
+                                showNumber: !isSearchVisible,
                                 onClick: {
-                                    onSelect(index)
-                                }
+                                    onSelect(historyItem.index)
+                                },
+                                searchQuery: searchText
                             )
                         }
                     }
@@ -167,9 +248,15 @@ struct QuickPanelView: View {
             if !clipboardMonitor.clipboardHistory.isEmpty {
                 Divider()
                 HStack {
-                    Text("Click or type a number to copy - then press Cmd+V to paste")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                    if searchText.isEmpty {
+                        Text("Use arrows or type a number • Press Enter or Cmd+V to paste")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    } else {
+                        Text("\(filteredHistory.count) of \(clipboardMonitor.clipboardHistory.count) items")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
                     Spacer()
                     if !selectedIndex.isEmpty {
                         Text("Selected: \(selectedIndex)")
@@ -183,6 +270,19 @@ struct QuickPanelView: View {
         }
         .frame(width: 600, height: 500)
         .background(Color(NSColor.windowBackgroundColor))
+        .onChange(of: isSearchVisible) { _, newValue in
+            if !newValue {
+                searchText = ""
+            } else {
+                selectedItemIndex = 0
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    isSearchFocused = true
+                }
+            }
+        }
+        .onChange(of: filteredHistory.map { $0.index }) { _, newIndices in
+            onFilteredIndicesChange(newIndices)
+        }
     }
 }
 
@@ -190,19 +290,23 @@ struct QuickPanelItemRow: View {
     let number: Int
     let item: ClipboardMonitor.ClipboardItem
     let isSelected: Bool
+    var showNumber: Bool = true
     let onClick: () -> Void
+    var searchQuery: String = ""
     @State private var isHovered = false
     
     var body: some View {
         Button(action: onClick) {
             HStack(spacing: 12) {
-                // Number badge
-                Text("\(number)")
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
-                    .frame(width: 32, height: 32)
-                    .background(isSelected ? Color.blue : (isHovered ? Color.gray.opacity(0.8) : Color.gray))
-                    .cornerRadius(8)
+                // Number badge (only shown when not searching)
+                if showNumber {
+                    Text("\(number)")
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .frame(width: 32, height: 32)
+                        .background(isSelected ? Color.blue : (isHovered ? Color.gray.opacity(0.8) : Color.gray))
+                        .cornerRadius(8)
+                }
                 
                 // Content
                 VStack(alignment: .leading, spacing: 4) {
@@ -478,7 +582,9 @@ struct ClipboardItemRow: View {
 
 // MARK: - Panel State
 class PanelState: ObservableObject {
-    @Published var selectedIndex = ""
+    @Published var selectedIndex: String = ""
+    @Published var isSearchVisible: Bool = false
+    @Published var selectedItemIndex: Int = 0 // For arrow key navigation
 }
 
 // MARK: - App Delegate
@@ -609,6 +715,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func hideQuickPanel() {
         quickPanelWindow?.orderOut(nil)
         panelState.selectedIndex = ""
+        panelState.isSearchVisible = false
     }
     
     func selectClipboardItem(at index: Int) {
@@ -745,37 +852,103 @@ struct QuickPanelWindowView: View {
     @ObservedObject var panelState: PanelState
     let onSelect: (Int) -> Void
     let onClose: () -> Void
+    @State private var filteredIndices: [Int] = []
+    
+    private var filteredCount: Int {
+        filteredIndices.count
+    }
     
     var body: some View {
         QuickPanelView(
             clipboardMonitor: clipboardMonitor,
             selectedIndex: $panelState.selectedIndex,
-            onSelect: onSelect
+            isSearchVisible: $panelState.isSearchVisible,
+            selectedItemIndex: $panelState.selectedItemIndex,
+            onSelect: onSelect,
+            onFilteredIndicesChange: { indices in
+                filteredIndices = indices
+            }
         )
         .onAppear {
+            // Initialize filteredIndices with all items
+            filteredIndices = Array(0..<clipboardMonitor.clipboardHistory.count)
+            
             NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                handleKeyPress(event)
-                return nil
+                // Check arrow keys and Return - intercept them in both modes
+                if event.keyCode == 125 || event.keyCode == 126 || event.keyCode == 36 { // Down, Up, Return
+                    let _ = handleKeyPress(event)
+                    return nil // Consume the event
+                }
+                
+                let handled = handleKeyPress(event)
+                return handled ? nil : event
             }
         }
     }
     
-    func handleKeyPress(_ event: NSEvent) {
-        if event.keyCode == 53 { // Escape
-            onClose()
-        } else if event.keyCode == 36 { // Return
-            if let index = Int(panelState.selectedIndex), index > 0 && index <= clipboardMonitor.clipboardHistory.count {
-                onSelect(index - 1)
+    func handleKeyPress(_ event: NSEvent) -> Bool {
+        // Escape - close search first if open, then close window
+        if event.keyCode == 53 {
+            if panelState.isSearchVisible {
+                panelState.isSearchVisible = false
+            } else {
+                onClose()
             }
-        } else if let char = event.charactersIgnoringModifiers, char.count == 1 {
-            let character = char.first!
-            if character.isNumber {
-                panelState.selectedIndex += String(character)
-                if let index = Int(panelState.selectedIndex), index > 0 && index <= clipboardMonitor.clipboardHistory.count {
+            return true
+        }
+        
+        // Cmd+F - toggle search
+        if event.keyCode == 3 && event.modifierFlags.contains(.command) {
+            panelState.isSearchVisible.toggle()
+            return true
+        }
+        
+        // Arrow keys - navigate in both modes
+        if event.keyCode == 125 { // Down arrow
+            if panelState.isSearchVisible {
+                let maxIndex = max(0, filteredCount - 1)
+                panelState.selectedItemIndex = min(panelState.selectedItemIndex + 1, maxIndex)
+            } else {
+                let maxIndex = max(0, clipboardMonitor.clipboardHistory.count - 1)
+                panelState.selectedItemIndex = min(panelState.selectedItemIndex + 1, maxIndex)
+            }
+            return true
+        } else if event.keyCode == 126 { // Up arrow
+            panelState.selectedItemIndex = max(panelState.selectedItemIndex - 1, 0)
+            return true
+        } else if event.keyCode == 36 { // Return - select current item
+            if panelState.isSearchVisible {
+                if filteredCount > 0 && panelState.selectedItemIndex < filteredCount {
+                    // Get the actual history index from filtered indices
+                    let actualIndex = filteredIndices[panelState.selectedItemIndex]
+                    onSelect(actualIndex)
+                }
+            } else {
+                // In non-search mode, use arrow-selected index if set, otherwise fall back to number selection
+                if panelState.selectedItemIndex >= 0 && panelState.selectedItemIndex < clipboardMonitor.clipboardHistory.count {
+                    onSelect(panelState.selectedItemIndex)
+                } else if let index = Int(panelState.selectedIndex), index > 0 && index <= clipboardMonitor.clipboardHistory.count {
                     onSelect(index - 1)
                 }
             }
+            return true
         }
+        
+        // Number key selection when search is not visible
+        if !panelState.isSearchVisible {
+            if let char = event.charactersIgnoringModifiers, char.count == 1 {
+                let character = char.first!
+                if character.isNumber {
+                    panelState.selectedIndex += String(character)
+                    if let index = Int(panelState.selectedIndex), index > 0 && index <= clipboardMonitor.clipboardHistory.count {
+                        onSelect(index - 1)
+                        return true
+                    }
+                }
+            }
+        }
+        
+        return false
     }
 }
 
