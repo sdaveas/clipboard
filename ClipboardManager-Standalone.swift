@@ -24,10 +24,17 @@ class SettingsManager: ObservableObject {
         }
     }
     
+    @Published var skipPasswords: Bool {
+        didSet {
+            UserDefaults.standard.set(skipPasswords, forKey: "skipPasswords")
+        }
+    }
+    
     private init() {
         self.maxHistoryCount = UserDefaults.standard.object(forKey: "maxHistoryCount") as? Int ?? 10
         self.keyModifier = UserDefaults.standard.string(forKey: "keyModifier") ?? "Ctrl+Shift"
         self.keyCode = UserDefaults.standard.string(forKey: "keyCode") ?? "P"
+        self.skipPasswords = UserDefaults.standard.object(forKey: "skipPasswords") as? Bool ?? false
     }
     
     func getKeyCodeValue() -> UInt32 {
@@ -88,7 +95,12 @@ class ClipboardMonitor: ObservableObject {
             
             if let text = pasteboard.string(forType: .string), !text.isEmpty {
                 if clipboardHistory.first?.text != text {
-                    addToHistory(text: text)
+                    // Skip if it looks like a password and the setting is enabled
+                    if settings.skipPasswords && isLikelyPassword(text) {
+                        print("🔒 Skipped likely password from history")
+                    } else {
+                        addToHistory(text: text)
+                    }
                 }
             }
         }
@@ -108,6 +120,49 @@ class ClipboardMonitor: ObservableObject {
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
         lastChangeCount = pasteboard.changeCount
+    }
+    
+    // MARK: - Password Detection
+    private func isLikelyPassword(_ text: String) -> Bool {
+        // Skip very short or very long strings
+        guard text.count >= 8 && text.count <= 128 else { return false }
+        
+        // Skip if contains whitespace (most passwords don't)
+        guard !text.contains(where: { $0.isWhitespace }) else { return false }
+        
+        // Calculate character variety
+        let hasUppercase = text.contains(where: { $0.isUppercase })
+        let hasLowercase = text.contains(where: { $0.isLowercase })
+        let hasDigit = text.contains(where: { $0.isNumber })
+        let hasSymbol = text.contains(where: { !$0.isLetter && !$0.isNumber })
+        
+        // Passwords almost always have digits; code snippets often don't
+        guard hasDigit else { return false }
+        
+        let varietyScore = [hasUppercase, hasLowercase, hasDigit, hasSymbol].filter { $0 }.count
+        
+        // Calculate entropy (randomness)
+        let entropy = calculateEntropy(text)
+        
+        // High entropy + high character variety + must have digits = likely password
+        return entropy > 3.5 && varietyScore >= 3
+    }
+    
+    private func calculateEntropy(_ text: String) -> Double {
+        var frequencies: [Character: Int] = [:]
+        for char in text {
+            frequencies[char, default: 0] += 1
+        }
+        
+        let length = Double(text.count)
+        var entropy = 0.0
+        
+        for count in frequencies.values {
+            let probability = Double(count) / length
+            entropy -= probability * log2(probability)
+        }
+        
+        return entropy
     }
 }
 
@@ -406,6 +461,18 @@ struct SettingsView: View {
                                 .font(.system(.body, design: .monospaced))
                         }
                         Text("Number of clipboard items to keep in history")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                    
+                    Divider()
+                    
+                    // Skip Passwords Toggle
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Password Detection")
+                            .font(.headline)
+                        Toggle("Skip likely passwords", isOn: $settings.skipPasswords)
+                        Text("When enabled, text that looks like passwords (high entropy, mixed characters, no spaces) won't be saved to history.")
                             .font(.caption)
                             .foregroundColor(.gray)
                     }
