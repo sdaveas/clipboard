@@ -8,6 +8,8 @@
 
 A lightweight, native macOS menu bar app that remembers your clipboard history.
 
+![Demo](recording.gif)
+
 </div>
 
 ---
@@ -41,7 +43,27 @@ Clipboard Manager is a simple tool that sits quietly in your macOS menu bar and 
 
 ## 🚀 Getting Started
 
-### Installation
+### Quick Install (One Command)
+
+Open Terminal and run:
+
+```bash
+curl -L https://github.com/sdaveas/clipboard/releases/latest/download/ClipboardManager.zip -o /tmp/ClipboardManager.zip && \
+unzip -o /tmp/ClipboardManager.zip -d /Applications && \
+xattr -cr /Applications/ClipboardManager.app && \
+open /Applications/ClipboardManager.app && rm /tmp/ClipboardManager.zip
+```
+
+This will:
+- Download the latest release
+- Unzip it
+- Copy to Applications folder
+- Remove quarantine attributes
+- Launch the app
+
+You'll see a clipboard icon appear in your menu bar 📋
+
+### Manual Installation
 
 1. **Download** the latest release:
    - Click the blue "Download" badge above, or
@@ -64,8 +86,6 @@ Clipboard Manager is a simple tool that sits quietly in your macOS menu bar and 
 4. **Launch** the app:
    - Open it from your Applications folder
    - You'll see a clipboard icon appear in your menu bar 📋
-
-That's it! The app is now running and tracking your clipboard.
 
 ### Make it Start Automatically on Login (Optional)
 
